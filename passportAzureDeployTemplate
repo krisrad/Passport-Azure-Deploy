@@ -1,0 +1,333 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "sqlServerEdition": {
+            "type": "string",
+            "defaultValue": "Standard",
+            "allowedValues": [ "Enterprise", "Standard", "Web" ],
+            "metadata": {
+                "description": "The SQL Server edition for the SQL Server 2008 R2 installation on the VM. Allowed values: Enterprise, Standard, Web."
+            }
+        },
+        "adminUserName": {
+            "type": "string",
+            "metadata": { "description": "User name for the virtual machine" }
+        },
+        "adminUserPassword": {
+            "type": "securestring",
+            "metadata": { "description": "Password for the virtual machine. This will also be the sa user password for the default Sql Server 2008 R2 instance on the VM" }
+        },
+        "passportTrack": {
+            "type": "string",
+            "allowedValues": [ "pp25", "pp24" ],
+            "metadata": {
+                "description": "The version of Passport to be installed on the Virtual Machine. Indicates Passport 2.5 track or Passport 2.4 track."
+            }
+        },
+        "partnerAccessToken": {
+            "type": "string",
+            "metadata": {
+                "description": "Access token required to download proprietary software from WKELM"
+            }
+        },
+         "passportLicenseToken": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "License token required to access passport application installed on the VM"
+            }
+        },
+        "suffix": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "Optional string, suffixed to the end of resource names for better identification"
+            }
+        }
+    },
+    "variables": {
+        "storageAccountName": "[concat(parameters('passportTrack'), 'stor',parameters('suffix'))]",
+        "nsgName": "[concat(parameters('passportTrack'), 'nsg',parameters('suffix'))]",
+        "vnetName": "[concat(parameters('passportTrack'), 'vnet',parameters('suffix'))]",
+        "vnetPrefix": "10.0.0.0/16",
+        "subnetName": "[concat(parameters('passportTrack'), 'subnet',parameters('suffix'))]",
+        "subnetPrefix": "10.0.1.0/24",
+        "publicIPName": "[concat(parameters('passportTrack'), 'pip',parameters('suffix'))]",
+        "publicIPdnsName": "[concat(parameters('passportTrack'), 'app',parameters('suffix'))]",
+        "nicName": "[concat(parameters('passportTrack'), 'nic',parameters('suffix'))]",
+        "vmname": "[concat(parameters('passportTrack'), 'vm',parameters('suffix'))]",
+        "location": "[resourceGroup().location]",
+        "vmSize": "Standard_D2",
+        "imagePublisher": "MicrosoftSQLServer",
+        "imageOffer": "SQL2008R2SP3-WS2008R2SP1",
+        "osdiskname": "osdisk",
+        "storageAccountType": "Standard_LRS",
+        "vmStorageAccountContainerName": "vhds",
+        "vnetID": "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]",
+        "subnetID": "[concat(variables('vnetID'), '/subnets/', variables('subnetName'))]",
+        "vmExtensionName": "customScript"
+    },
+    "resources": [
+        {
+            "apiVersion": "2015-05-01-preview",
+            "type": "Microsoft.Storage/storageAccounts",
+            "name": "[variables('storageAccountName')]",
+            "location": "[variables('location')]",
+            "properties": {
+                "accountType": "[variables('storageAccountType')]"
+            }
+        },
+        {
+            "apiVersion": "2015-05-01-preview",
+            "type": "Microsoft.Network/networkSecurityGroups",
+            "name": "[variables('nsgName')]",
+            "location": "[variables('location')]",
+            "properties": {
+                "securityRules": [
+                    {
+                        "name": "rdp-rule",
+                        "properties": {
+                            "description": "Allow RDP",
+                            "protocol": "TCP",
+                            "sourcePortRange": "*",
+                            "destinationPortRange": "3389",
+                            "sourceAddressPrefix": "Internet",
+                            "destinationAddressPrefix": "*",
+                            "access": "Allow",
+                            "priority": 100,
+                            "direction": "Inbound"
+                        }
+                    },
+                    {
+                        "name": "web-rule",
+                        "properties": {
+                            "description": "Allow Web",
+                            "protocol": "Tcp",
+                            "sourcePortRange": "*",
+                            "destinationPortRange": "80",
+                            "sourceAddressPrefix": "Internet",
+                            "destinationAddressPrefix": "*",
+                            "access": "Allow",
+                            "priority": 101,
+                            "direction": "Inbound"
+                        }
+                    },
+                    {
+                        "name": "http-rule",
+                        "properties": {
+                            "description": "Allow 8080",
+                            "protocol": "Tcp",
+                            "sourcePortRange": "*",
+                            "destinationPortRange": "8080",
+                            "sourceAddressPrefix": "*",
+                            "destinationAddressPrefix": "*",
+                            "access": "Allow",
+                            "priority": 102,
+                            "direction": "Inbound"
+                        }
+                    },
+                    {
+                        "name": "https-rule",
+                        "properties": {
+                            "description": "Allow 443",
+                            "protocol": "Tcp",
+                            "sourcePortRange": "*",
+                            "destinationPortRange": "443",
+                            "sourceAddressPrefix": "*",
+                            "destinationAddressPrefix": "*",
+                            "access": "Allow",
+                            "priority": 103,
+                            "direction": "Inbound"
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "apiVersion": "2015-05-01-preview",
+            "type": "Microsoft.Network/virtualNetworks",
+            "name": "[variables('vnetName')]",
+            "location": "[variables('location')]",
+            "dependsOn": [
+                "[concat('Microsoft.Network/networkSecurityGroups/', variables('nsgName'))]"
+            ],
+            "properties": {
+                "addressSpace": {
+                    "addressPrefixes": [
+                        "[variables('vnetPrefix')]"
+                    ]
+                },
+                "subnets": [
+                    {
+                        "name": "[variables('subnetName')]",
+                        "properties": {
+                            "addressPrefix": "[variables('subnetPrefix')]",
+                            "networkSecurityGroup": {
+                                "id": "[resourceId('Microsoft.Network/networkSecurityGroups', variables('nsgName'))]"
+                            }
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "apiVersion": "2015-05-01-preview",
+            "type": "Microsoft.Network/publicIPAddresses",
+            "name": "[variables('publicIPname')]",
+            "location": "[variables('location')]",
+            "properties": {
+                "publicIPAllocationMethod": "dynamic",
+                "dnsSettings": {
+                    "domainNameLabel": "[variables('publicIPdnsName')]"
+                }
+            }
+        },
+        {
+            "apiVersion": "2015-05-01-preview",
+            "type": "Microsoft.Network/networkInterfaces",
+            "name": "[variables('nicName')]",
+            "location": "[variables('location')]",
+            "dependsOn": [
+                "[concat('Microsoft.Network/publicIPAddresses/', variables('publicIPname'))]",
+                "[concat('Microsoft.Network/virtualNetworks/', variables('vnetName'))]"
+            ],
+            "properties": {
+                "ipConfigurations": [
+                    {
+                        "name": "ipconfig1",
+                        "properties": {
+                            "privateIPAllocationMethod": "Dynamic",
+                            "publicIPAddress": {
+                                "id": "[resourceId('Microsoft.Network/publicIPAddresses', variables('publicIPname'))]"
+                            },
+                            "subnet": {
+                                "id": "[variables('subnetID')]"
+                            }
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "apiVersion": "2015-05-01-preview",
+            "type": "Microsoft.Compute/virtualMachines",
+            "name": "[variables('vmName')]",
+            "location": "[variables('location')]",
+            "dependsOn": [
+                "[concat('Microsoft.Storage/storageAccounts/', variables('storageAccountName'))]",
+                "[concat('Microsoft.Network/networkInterfaces/', variables('nicName'))]"
+            ],
+            "properties": {
+                "hardwareProfile": {
+                    "vmSize": "[variables('vmSize')]"
+                },
+                "osProfile": {
+                    "computerName": "[variables('vmName')]",
+                    "adminUsername": "[parameters('adminUserName')]",
+                    "adminPassword": "[parameters('adminUserPassword')]"
+                },
+                "storageProfile": {
+                    "imageReference": {
+                        "offer": "[variables('imageOffer')]",
+                        "publisher": "[variables('imagePublisher')]",
+                        "sku": "[parameters('sqlServerEdition')]",
+                        "version": "latest"
+                    },
+                    "osDisk": {
+                        "name": "osdisk",
+                        "vhd": {
+                            "uri": "[concat('http://', variables('storageAccountName'), '.blob.core.windows.net/', variables('vmStorageAccountContainerName'),'/',variables('osdiskname'),'.vhd')]"
+                        },
+                        "caching": "ReadWrite",
+                        "createOption": "FromImage"
+                    }
+                },
+                "networkProfile": {
+                    "networkInterfaces": [
+                        {
+                            "id": "[resourceId('Microsoft.Network/networkInterfaces', variables('nicName'))]"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "apiVersion": "2015-05-01-preview",
+            "type": "Microsoft.Compute/virtualMachines/extensions",
+            "name": "[concat(variables('vmName'), '/', 'passportsetup')]",
+            "location": "[variables('location')]",
+            "dependsOn": [
+                "[concat('Microsoft.Compute/VirtualMachines/', variables('vmname'))]"
+            ],
+            "properties": {
+                "publisher": "Microsoft.Compute",
+                "type": "CustomScriptExtension",
+                "typeHandlerVersion": "1.4",
+                "settings": {
+                    "fileUris": [
+                        "[concat('https://elmppstor.blob.core.windows.net/', parameters('passportTrack'),'/','entrymain.ps1',parameters('partnerAccessToken'))]",
+                        "[concat('https://elmppstor.blob.core.windows.net/', parameters('passportTrack'),'/','customscripts.zip',parameters('partnerAccessToken'))]",
+                        "[concat('https://elmppstor.blob.core.windows.net/', parameters('passportTrack'),'/',parameters('passportTrack'),'_c1fullinstaller.zip',parameters('partnerAccessToken'))]",
+                        "[concat('https://elmppstor.blob.core.windows.net/', parameters('passportTrack'),'/',parameters('passportTrack'),'_c2upgradeinstaller.zip',parameters('partnerAccessToken'))]",
+                        "[concat('https://elmppstor.blob.core.windows.net/', parameters('passportTrack'),'/',parameters('passportTrack'),'_c3restapi.zip',parameters('partnerAccessToken'))]",
+                        "[concat('https://elmppstor.blob.core.windows.net/', parameters('passportTrack'),'/',parameters('passportTrack'),'_c7glowroot.zip',parameters('partnerAccessToken'))]",
+                        "[concat('https://elmppstor.blob.core.windows.net/', parameters('passportTrack'),'/',parameters('passportTrack'),'_c8passportlicensing.zip',parameters('partnerAccessToken'))]"
+
+                    ],
+                    "commandToExecute": "[concat('powershell.exe -ExecutionPolicy Unrestricted -File entrymain.ps1', ' ', parameters('passportTrack'), ' ', parameters('adminUserName'), ' ', parameters('adminUserPassword'), ' ', parameters('passportLicenseToken'))]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Compute/virtualMachines/extensions",
+            "name": "[concat(variables('vmName'),'/','antimalware')]",
+            "apiVersion": "2015-05-01-preview",
+            "location": "[variables('location')]",
+            "dependsOn": [
+                "[concat('Microsoft.Compute/virtualMachines/', variables('vmName'))]",
+                "[concat('Microsoft.Compute/virtualMachines/', variables('vmName'), '/extensions/passportsetup')]"                     
+            ],
+            "properties": {
+                "publisher": "Microsoft.Azure.Security",
+                "type": "IaaSAntimalware",
+                "typeHandlerVersion": "1.1",
+                "settings": {
+                    "AntimalwareEnabled": "true",
+                    "Exclusions": {
+                        "Paths": "C:\\Users",
+                        "Extensions": ".txt",
+                        "Processes": "taskmgr.exe"
+                    },
+                    "RealtimeProtectionEnabled": "true",
+                    "ScheduledScanSettings": {
+                        "isEnabled": "true",
+                        "scanType": "Quick",
+                        "day": "7",
+                        "time": "120"
+                    }
+                },
+                "protectedSettings": null
+            }
+        },
+        {
+          "apiVersion": "2015-05-01-preview",
+          "type": "Microsoft.Compute/virtualMachines/extensions",
+          "name": "[concat(variables('vmName'),'/', 'symantec')]",
+          "location": "[variables('location')]",
+          "dependsOn": [
+            "[concat('Microsoft.Compute/virtualMachines/', variables('vmName'))]",
+            "[concat('Microsoft.Compute/virtualMachines/', variables('vmName'), '/extensions/antimalware')]"            
+          ],
+          "properties": {
+            "publisher": "Symantec",
+            "type": "SymantecEndpointProtection",
+            "typeHandlerVersion": "12.1",
+            "settings": null,
+            "protectedSettings": null
+          }
+        }
+    ],
+    "outputs": {
+    }
+}
