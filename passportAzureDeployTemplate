@@ -31,11 +31,23 @@
                 "description": "Access token required to download proprietary software from WKELM"
             }
         },
-         "passportLicenseToken": {
+        "passportLicenseToken": {
             "type": "string",
             "defaultValue": "",
             "metadata": {
                 "description": "License token required to access passport application installed on the VM"
+            }
+        },
+        "downloadPath": {
+            "type": "string",
+            "metadata": {
+                "description": "File system path inside the Virtual Machine, where the proprietary software will be downloaded"
+            }
+        },
+        "installPath": {
+            "type": "string",
+            "metadata": {
+                "description": "File system path inside the Virtual Machine, where the proprietary software will be installed"
             }
         },
         "suffix": {
@@ -275,7 +287,7 @@
                         "[concat('https://elmppstor.blob.core.windows.net/', parameters('passportTrack'),'/',parameters('passportTrack'),'_c8passportlicensing.zip',parameters('partnerAccessToken'))]"
 
                     ],
-                    "commandToExecute": "[concat('powershell.exe -ExecutionPolicy Unrestricted -File entrymain.ps1', ' ', parameters('passportTrack'), ' ', parameters('adminUserName'), ' ', parameters('adminUserPassword'), ' ', parameters('passportLicenseToken'))]"
+                    "commandToExecute": "[concat('powershell.exe -ExecutionPolicy Unrestricted -File entrymain.ps1', ' ', parameters('passportTrack'), ' ', parameters('adminUserName'), ' ', parameters('adminUserPassword'), ' ', parameters('passportLicenseToken'), ' ', parameters('downloadPath'), ' ', parameters('installPath'))]"
                 }
             }
         },
