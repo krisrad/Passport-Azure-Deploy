@@ -33,7 +33,6 @@
         },
         "passportLicenseToken": {
             "type": "string",
-            "defaultValue": "",
             "metadata": {
                 "description": "License token required to access passport application installed on the VM"
             }
