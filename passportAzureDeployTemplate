@@ -51,9 +51,8 @@
         },
         "suffix": {
             "type": "string",
-            "defaultValue": "",
             "metadata": {
-                "description": "Optional string, suffixed to the end of resource names for better identification"
+                "description": "String literal suffixed to the end of resource names to make the resource names unique"
             }
         }
     },
